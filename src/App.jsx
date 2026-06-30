@@ -49,9 +49,7 @@ function Header() {
     <header className="header">
       <div className="container header-content">
         <Link to="/" className="logo">
-          <div className="logo-icon">
-            <Trash2 size={24} />
-          </div>
+          <img className="logo-icon" src="/favicon.svg" alt="" />
           MATKASYM
         </Link>
         <nav className="nav">
