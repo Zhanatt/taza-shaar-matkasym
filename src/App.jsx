@@ -378,9 +378,6 @@ function SubmitPage() {
             <p className="success-text">
               Благодаря вам наш город станет чище. Каждая заявка приближает нас к комфортной городской среде.
             </p>
-            <p className="success-subtext">
-              Когда на эту точку поступит 10 заявок — мы установим урну!
-            </p>
             <button
               className="btn btn-primary"
               onClick={() => setSubmitted(false)}
