@@ -40,10 +40,11 @@ app.get('/api/stats', async (req, res) => {
     requests.forEach(req => {
       const key = req.address.toLowerCase().trim()
       if (!groups[key]) {
-        groups[key] = { address: req.address, count: 0, photos: [], lat: req.lat, lng: req.lng }
+        groups[key] = { address: req.address, count: 0, photos: [], lat: req.lat, lng: req.lng, lastDate: req.date }
       }
       groups[key].count++
       if (req.photo) groups[key].photos.push(req.photo)
+      groups[key].lastDate = req.date
     })
 
     const locations = Object.values(groups)
