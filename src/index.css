@@ -264,6 +264,7 @@ body {
 
 /* Photo Upload */
 .photo-upload {
+  display: block;
   border: 2px dashed var(--border);
   border-radius: var(--radius);
   padding: 40px;
