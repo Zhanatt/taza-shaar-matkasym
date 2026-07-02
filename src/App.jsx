@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, createContext, useContext } from 'react'
+import { useState, useEffect, createContext, useContext } from 'react'
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { Camera, MapPin, Users, Trash2, CheckCircle, Clock, AlertCircle, Crosshair, LogOut, Edit, Eye } from 'lucide-react'
+import { Camera, MapPin, Users, CheckCircle, Clock, LogOut, Bell, Eye, Upload, Phone, ChevronRight } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -17,56 +17,95 @@ const API_URL = import.meta.env.PROD
   ? 'https://taza-shaar-api.onrender.com'
   : 'http://localhost:3001'
 
-// Auth context
 const AuthContext = createContext(null)
-
 const useAuth = () => useContext(AuthContext)
 
-const USERS = {
-  manager: { password: 'manager123', role: 'manager' },
-  admin: { password: 'admin123', role: 'admin' }
-}
-
 const api = {
+  // Auth
+  async loginUser(phone) {
+    const res = await fetch(`${API_URL}/api/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    })
+    return res.json()
+  },
+  async loginStaff(username, password) {
+    const res = await fetch(`${API_URL}/api/auth/staff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    })
+    if (!res.ok) throw new Error('Invalid credentials')
+    return res.json()
+  },
+
+  // Votes
+  async submitVote(data) {
+    const res = await fetch(`${API_URL}/api/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    return res.json()
+  },
+  async getUserVotes(phone) {
+    const res = await fetch(`${API_URL}/api/votes/${phone}`)
+    return res.json()
+  },
+
+  // Locations
+  async getLocations() {
+    const res = await fetch(`${API_URL}/api/locations`)
+    return res.json()
+  },
+  async getReadyLocations() {
+    const res = await fetch(`${API_URL}/api/locations/ready`)
+    return res.json()
+  },
+  async getInstallingLocations() {
+    const res = await fetch(`${API_URL}/api/locations/installing`)
+    return res.json()
+  },
+  async getCompletedLocations() {
+    const res = await fetch(`${API_URL}/api/locations/completed`)
+    return res.json()
+  },
+  async markReady(id) {
+    const res = await fetch(`${API_URL}/api/locations/${id}/ready`, { method: 'POST' })
+    return res.json()
+  },
+  async assignInstaller(id) {
+    const res = await fetch(`${API_URL}/api/locations/${id}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ installerId: 'self' })
+    })
+    return res.json()
+  },
+  async completeInstallation(id, data) {
+    const res = await fetch(`${API_URL}/api/locations/${id}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    return res.json()
+  },
+
+  // Notifications
+  async getNotifications(phone) {
+    const res = await fetch(`${API_URL}/api/notifications/${phone}`)
+    return res.json()
+  },
+
+  // Stats
   async getStats() {
     const res = await fetch(`${API_URL}/api/stats`)
     return res.json()
-  },
-  async createRequest(data) {
-    const res = await fetch(`${API_URL}/api/requests`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    })
-    return res.json()
-  },
-  async getProcessed() {
-    const res = await fetch(`${API_URL}/api/processed`)
-    return res.json()
-  },
-  async markProcessed(address) {
-    const res = await fetch(`${API_URL}/api/processed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address })
-    })
-    return res.json()
-  },
-  async deleteRequest(id) {
-    const res = await fetch(`${API_URL}/api/requests/${id}`, {
-      method: 'DELETE'
-    })
-    return res.json()
-  },
-  async updateRequest(id, data) {
-    const res = await fetch(`${API_URL}/api/requests/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    })
-    return res.json()
   }
 }
+
+// ============ COMPONENTS ============
 
 function Header() {
   const location = useLocation()
@@ -76,27 +115,41 @@ function Header() {
     <header className="header">
       <div className="container header-content">
         <Link to="/" className="logo">
-          <img className="logo-main" src="/logo-main.png" alt="MATKASYM" />
+          <img className="logo-main" src="/logo-main.png" alt="TAZA SHAAR" />
         </Link>
         <nav className="nav">
           <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>
             Главная
           </Link>
-          {auth?.role && (
-            <Link to="/dashboard" className={`nav-link ${location.pathname === '/dashboard' ? 'active' : ''}`}>
-              {auth.role === 'admin' ? 'Админ' : 'Панель'}
+          {auth?.role === 'user' && (
+            <>
+              <Link to="/my-requests" className={`nav-link ${location.pathname === '/my-requests' ? 'active' : ''}`}>
+                Мои заявки
+              </Link>
+              <Link to="/submit" className="nav-link accent">
+                Подать заявку
+              </Link>
+            </>
+          )}
+          {auth?.role === 'manager' && (
+            <Link to="/manager" className={`nav-link ${location.pathname === '/manager' ? 'active' : ''}`}>
+              Панель
             </Link>
           )}
-          {!auth?.role && (
-            <Link to="/login" className={`nav-link ${location.pathname === '/login' ? 'active' : ''}`}>
-              Вход
+          {auth?.role === 'installer' && (
+            <Link to="/installer" className={`nav-link ${location.pathname === '/installer' ? 'active' : ''}`}>
+              Установки
             </Link>
           )}
-          <Link to="/submit" className="nav-link accent">
-            Подать заявку
-          </Link>
-          {auth?.role && (
-            <button onClick={auth.logout} className="nav-link" style={{border: 'none', background: 'none', cursor: 'pointer'}}>
+          {auth?.role === 'admin' && (
+            <Link to="/admin" className={`nav-link ${location.pathname === '/admin' ? 'active' : ''}`}>
+              Админ
+            </Link>
+          )}
+          {!auth?.role ? (
+            <Link to="/login" className="nav-link">Вход</Link>
+          ) : (
+            <button onClick={auth.logout} className="nav-link logout-btn">
               <LogOut size={18} />
             </button>
           )}
@@ -110,53 +163,61 @@ function Footer() {
   return (
     <footer className="footer">
       <div className="container">
-        <img src="/logo-main.png" alt="MATKASYM" style={{height: 24, marginBottom: 12, filter: 'brightness(0) invert(1)'}} />
+        <img src="/logo-main.png" alt="TAZA SHAAR" style={{height: 24, marginBottom: 12, filter: 'brightness(0) invert(1)'}} />
         <p>Вместе сделаем город чище</p>
       </div>
     </footer>
   )
 }
 
+// ============ PAGES ============
+
 function HomePage() {
+  const auth = useAuth()
+
   return (
     <>
       <section className="hero">
         <div className="container">
           <h1>Чистый город — наша забота</h1>
-          <p>
-            Видите грязное место в городе? Сообщите нам, и мы установим там урну!
-          </p>
-          <Link to="/submit" className="btn btn-primary" style={{fontSize: '18px', padding: '18px 36px'}}>
-            <Camera size={24} />
-            Подать заявку
-          </Link>
+          <p>Видите место, где нужна урна? Сообщите нам!</p>
+          {auth?.role === 'user' ? (
+            <Link to="/submit" className="btn btn-primary btn-lg">
+              <Camera size={24} />
+              Подать заявку
+            </Link>
+          ) : (
+            <Link to="/login" className="btn btn-primary btn-lg">
+              <Phone size={24} />
+              Войти по номеру
+            </Link>
+          )}
         </div>
       </section>
 
       <section className="section">
         <div className="container">
           <h2 className="section-title">Как это работает?</h2>
-          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '32px'}}>
-            <div className="card" style={{textAlign: 'center'}}>
-              <div style={{width: '64px', height: '64px', background: 'rgba(233, 69, 96, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: 'var(--accent)'}}>
-                <Camera size={32} />
-              </div>
-              <h3 style={{marginBottom: '12px', color: 'var(--text)'}}>1. Сфотографируйте</h3>
-              <p style={{color: 'var(--text-muted)'}}>Найдите грязное место и сделайте фото</p>
+          <div className="steps-grid">
+            <div className="step-card">
+              <div className="step-icon"><Camera size={32} /></div>
+              <h3>1. Сфотографируйте</h3>
+              <p>Найдите место где нужна урна</p>
             </div>
-            <div className="card" style={{textAlign: 'center'}}>
-              <div style={{width: '64px', height: '64px', background: 'rgba(233, 69, 96, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: 'var(--accent)'}}>
-                <MapPin size={32} />
-              </div>
-              <h3 style={{marginBottom: '12px', color: 'var(--text)'}}>2. Укажите адрес</h3>
-              <p style={{color: 'var(--text-muted)'}}>Отметьте место на карте</p>
+            <div className="step-card">
+              <div className="step-icon"><MapPin size={32} /></div>
+              <h3>2. Укажите место</h3>
+              <p>Отметьте локацию на карте</p>
             </div>
-            <div className="card" style={{textAlign: 'center'}}>
-              <div style={{width: '64px', height: '64px', background: 'rgba(233, 69, 96, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: 'var(--accent)'}}>
-                <CheckCircle size={32} />
-              </div>
-              <h3 style={{marginBottom: '12px', color: 'var(--text)'}}>3. Готово!</h3>
-              <p style={{color: 'var(--text-muted)'}}>Мы рассмотрим заявку и примем меры</p>
+            <div className="step-card">
+              <div className="step-icon"><Users size={32} /></div>
+              <h3>3. Соберите голоса</h3>
+              <p>Когда 10 человек отметят — установим урну</p>
+            </div>
+            <div className="step-card">
+              <div className="step-icon"><CheckCircle size={32} /></div>
+              <h3>4. Получите отчёт</h3>
+              <p>Пришлём фото установленной урны</p>
             </div>
           </div>
         </div>
@@ -166,103 +227,123 @@ function HomePage() {
 }
 
 function LoginPage() {
+  const [mode, setMode] = useState('user')
+  const [phone, setPhone] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const auth = useAuth()
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    const user = USERS[username]
-    if (user && user.password === password) {
-      auth.login(username, user.role)
-    } else {
-      setError('Неверный логин или пароль')
-    }
+  if (auth?.role) {
+    if (auth.role === 'user') return <Navigate to="/my-requests" />
+    if (auth.role === 'manager') return <Navigate to="/manager" />
+    if (auth.role === 'installer') return <Navigate to="/installer" />
+    if (auth.role === 'admin') return <Navigate to="/admin" />
   }
 
-  if (auth?.role) {
-    return <Navigate to="/dashboard" />
+  const handleUserLogin = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      const cleanPhone = phone.replace(/\D/g, '')
+      if (cleanPhone.length < 9) throw new Error('Введите корректный номер')
+      const user = await api.loginUser(cleanPhone)
+      auth.login({ ...user, role: 'user' })
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  const handleStaffLogin = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      const staff = await api.loginStaff(username, password)
+      auth.login(staff)
+    } catch (err) {
+      setError('Неверный логин или пароль')
+    }
+    setLoading(false)
   }
 
   return (
     <div className="page">
       <div className="container" style={{maxWidth: '400px'}}>
-        <h1 className="page-title">Вход</h1>
-        <form onSubmit={handleSubmit} className="card">
-          {error && <div style={{color: 'var(--accent)', marginBottom: '16px'}}>{error}</div>}
-          <div className="form-group">
-            <label className="form-label">Логин</label>
-            <input
-              type="text"
-              className="form-input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Пароль</label>
-            <input
-              type="password"
-              className="form-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <button type="submit" className="btn btn-primary" style={{width: '100%'}}>
-            Войти
+        <h1 className="page-title" style={{textAlign: 'center'}}>Вход</h1>
+
+        <div className="login-tabs">
+          <button className={`login-tab ${mode === 'user' ? 'active' : ''}`} onClick={() => setMode('user')}>
+            Пользователь
           </button>
-        </form>
+          <button className={`login-tab ${mode === 'staff' ? 'active' : ''}`} onClick={() => setMode('staff')}>
+            Сотрудник
+          </button>
+        </div>
+
+        {error && <div className="error-message">{error}</div>}
+
+        {mode === 'user' ? (
+          <form onSubmit={handleUserLogin} className="card">
+            <div className="form-group">
+              <label className="form-label">Номер телефона</label>
+              <input
+                type="tel"
+                className="form-input"
+                placeholder="+996 XXX XXX XXX"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+              />
+            </div>
+            <button type="submit" className="btn btn-primary" style={{width: '100%'}} disabled={loading}>
+              {loading ? 'Вход...' : 'Войти'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleStaffLogin} className="card">
+            <div className="form-group">
+              <label className="form-label">Логин</label>
+              <input
+                type="text"
+                className="form-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Пароль</label>
+              <input
+                type="password"
+                className="form-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <button type="submit" className="btn btn-primary" style={{width: '100%'}} disabled={loading}>
+              {loading ? 'Вход...' : 'Войти'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   )
 }
 
+// Location picker for map
 function LocationMarker({ position, setPosition, setAddress }) {
-  const map = useMapEvents({
+  useMapEvents({
     click(e) {
       setPosition(e.latlng)
       reverseGeocode(e.latlng.lat, e.latlng.lng, setAddress)
     },
   })
-
   return position ? <Marker position={position} /> : null
-}
-
-function MapCenterButton({ setPosition, setAddress, setLoading }) {
-  const map = useMap()
-
-  const handleClick = () => {
-    setLoading(true)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords
-        const latlng = { lat: latitude, lng: longitude }
-        map.flyTo(latlng, 17)
-        setPosition(latlng)
-        reverseGeocode(latitude, longitude, setAddress)
-        setLoading(false)
-      },
-      (err) => {
-        alert('Не удалось определить местоположение')
-        setLoading(false)
-      },
-      { enableHighAccuracy: true }
-    )
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="map-locate-btn"
-      title="Определить моё местоположение"
-    >
-      <Crosshair size={20} />
-    </button>
-  )
 }
 
 async function reverseGeocode(lat, lng, setAddress) {
@@ -275,31 +356,15 @@ async function reverseGeocode(lat, lng, setAddress) {
     if (data.display_name) {
       const addr = data.address
       const parts = []
-
-      // Улица + номер дома
       if (addr.road) {
         let street = addr.road
-        if (addr.house_number) {
-          street += ', ' + addr.house_number
-        }
+        if (addr.house_number) street += ', ' + addr.house_number
         parts.push(street)
       }
-
-      // Район/микрорайон
-      if (addr.suburb || addr.neighbourhood) {
-        parts.push(addr.suburb || addr.neighbourhood)
-      }
-
-      // Город
       if (addr.city || addr.town || addr.village) {
         parts.push(addr.city || addr.town || addr.village)
       }
-
-      // Если ничего не нашли — берём первые 2 части display_name
-      if (!parts.length) {
-        parts.push(data.display_name.split(',').slice(0, 2).join(','))
-      }
-
+      if (!parts.length) parts.push(data.display_name.split(',').slice(0, 2).join(','))
       setAddress(parts.join(', '))
     }
   } catch (e) {
@@ -308,63 +373,51 @@ async function reverseGeocode(lat, lng, setAddress) {
 }
 
 function SubmitPage() {
+  const auth = useAuth()
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [address, setAddress] = useState('')
   const [comment, setComment] = useState('')
-  const [submitted, setSubmitted] = useState(false)
   const [position, setPosition] = useState(null)
-  const [geoLoading, setGeoLoading] = useState(false)
-  const defaultCenter = [43.238949, 76.945465]
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const defaultCenter = [42.87, 74.59]
 
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords
-          setPosition({ lat: latitude, lng: longitude })
-          reverseGeocode(latitude, longitude, setAddress)
-        },
-        () => {}
-      )
-    }
-  }, [])
+  if (!auth?.role) return <Navigate to="/login" />
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0]
     if (file) {
-      setPhoto(file)
       const reader = new FileReader()
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result)
-      }
+      reader.onloadend = () => setPhotoPreview(reader.result)
       reader.readAsDataURL(file)
     }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!address.trim()) return
+    if (!address.trim()) return setError('Укажите адрес')
+
+    setLoading(true)
+    setError('')
 
     try {
-      await api.createRequest({
+      const result = await api.submitVote({
+        phone: auth.phone,
         address: address.trim(),
-        comment,
-        photo: photoPreview,
         lat: position?.lat,
-        lng: position?.lng
+        lng: position?.lng,
+        photo: photoPreview,
+        comment
       })
 
+      if (result.error) throw new Error(result.error)
       setSubmitted(true)
-      setPhoto(null)
-      setPhotoPreview(null)
-      setAddress('')
-      setComment('')
-      setPosition(null)
     } catch (err) {
-      alert('Ошибка при отправке заявки')
-      console.error(err)
+      setError(err.message)
     }
+    setLoading(false)
   }
 
   if (submitted) {
@@ -378,17 +431,18 @@ function SubmitPage() {
                 <path className="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
               </svg>
             </div>
-            <h2 className="success-title">Заявка принята!</h2>
+            <h2 className="success-title">Голос принят!</h2>
             <p className="success-text">
-              Благодаря вам наш город станет чище. Каждая заявка приближает нас к комфортной городской среде.
+              Мы уведомим вас, когда урна будет установлена.
             </p>
-            <button
-              className="btn btn-primary"
-              onClick={() => setSubmitted(false)}
-              style={{marginTop: '24px'}}
-            >
-              Подать ещё одну заявку
-            </button>
+            <div style={{display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '24px'}}>
+              <button className="btn btn-secondary" onClick={() => setSubmitted(false)}>
+                Ещё заявка
+              </button>
+              <Link to="/my-requests" className="btn btn-primary">
+                Мои заявки
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -399,76 +453,41 @@ function SubmitPage() {
     <div className="page">
       <div className="container" style={{maxWidth: '600px'}}>
         <h1 className="page-title">Подать заявку</h1>
-        <p className="page-subtitle">
-          Сообщите о грязном месте, где нужна урна
-        </p>
 
-        {false && (
-          <div className="success-message">
-            <CheckCircle size={24} style={{marginBottom: '8px'}} />
-            <div style={{fontWeight: '600'}}>Заявка отправлена!</div>
-            <div style={{fontSize: '14px', marginTop: '4px'}}>
-              Спасибо за вашу помощь в создании чистого города
-            </div>
-          </div>
-        )}
+        {error && <div className="error-message">{error}</div>}
 
         <form onSubmit={handleSubmit} className="card">
           <div className="form-group">
             <label className="form-label">Фото места</label>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handlePhotoChange}
-              style={{display: 'none'}}
-              id="photo-input"
-            />
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} style={{display: 'none'}} id="photo-input" />
             <label htmlFor="photo-input" className="photo-upload">
               {photoPreview ? (
                 <img src={photoPreview} alt="Preview" className="photo-preview" />
               ) : (
                 <>
-                  <Camera className="photo-upload-icon" size={64} />
-                  <div style={{fontWeight: '600', marginBottom: '4px'}}>
-                    Нажмите, чтобы сделать фото
-                  </div>
-                  <div style={{color: 'var(--text-muted)', fontSize: '14px'}}>
-                    или выберите из галереи
-                  </div>
+                  <Camera className="photo-upload-icon" size={48} />
+                  <div>Нажмите чтобы сделать фото</div>
                 </>
               )}
             </label>
           </div>
 
           <div className="form-group">
-            <label className="form-label">
-              <MapPin size={18} style={{display: 'inline', marginRight: '6px', verticalAlign: 'middle'}} />
-              Местоположение *
-            </label>
+            <label className="form-label"><MapPin size={18} /> Местоположение</label>
             <div className="map-wrapper">
-              <MapContainer
-                center={position || defaultCenter}
-                zoom={position ? 17 : 12}
-                className="location-map"
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
+              <MapContainer center={defaultCenter} zoom={12} className="location-map">
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <LocationMarker position={position} setPosition={setPosition} setAddress={setAddress} />
-                <MapCenterButton setPosition={setPosition} setAddress={setAddress} setLoading={setGeoLoading} />
               </MapContainer>
-              {geoLoading && <div className="map-loading">Определение...</div>}
             </div>
             <input
               type="text"
               className="form-input"
-              placeholder="Адрес определится автоматически или нажмите на карту"
+              placeholder="Нажмите на карту для выбора места"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              required
               style={{marginTop: '12px'}}
+              required
             />
           </div>
 
@@ -482,8 +501,8 @@ function SubmitPage() {
             />
           </div>
 
-          <button type="submit" className="btn btn-primary" style={{width: '100%'}}>
-            Отправить заявку
+          <button type="submit" className="btn btn-primary" style={{width: '100%'}} disabled={loading}>
+            {loading ? 'Отправка...' : 'Отправить'}
           </button>
         </form>
       </div>
@@ -491,195 +510,215 @@ function SubmitPage() {
   )
 }
 
-function Dashboard() {
+function MyRequestsPage() {
+  const auth = useAuth()
+  const [votes, setVotes] = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (auth?.phone) {
+      Promise.all([
+        api.getUserVotes(auth.phone),
+        api.getNotifications(auth.phone)
+      ]).then(([v, n]) => {
+        setVotes(v)
+        setNotifications(n)
+        setLoading(false)
+      })
+    }
+  }, [auth?.phone])
+
+  if (!auth?.role) return <Navigate to="/login" />
+
+  const getStatusText = (vote) => {
+    if (!vote.location) return 'Обработка...'
+    switch (vote.location.status) {
+      case 'collecting': return `Сбор голосов (${vote.location.votes}/10)`
+      case 'ready': return 'Готово к установке'
+      case 'installing': return 'Устанавливается'
+      case 'completed': return 'Установлено!'
+      default: return vote.location.status
+    }
+  }
+
+  const getStatusClass = (vote) => {
+    if (!vote.location) return 'badge-pending'
+    switch (vote.location.status) {
+      case 'collecting': return 'badge-pending'
+      case 'ready': return 'badge-ready'
+      case 'installing': return 'badge-installing'
+      case 'completed': return 'badge-done'
+      default: return ''
+    }
+  }
+
+  return (
+    <div className="page">
+      <div className="container">
+        <h1 className="page-title">Мои заявки</h1>
+
+        {notifications.length > 0 && (
+          <div className="notifications-section">
+            <h3><Bell size={18} /> Уведомления</h3>
+            {notifications.filter(n => !n.read).map(n => (
+              <div key={n._id} className="notification-card">
+                <p>{n.message}</p>
+                {n.photos?.length > 0 && (
+                  <div className="notification-photos">
+                    {n.photos.map((p, i) => <img key={i} src={p} alt="" />)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="loading">Загрузка...</div>
+        ) : votes.length === 0 ? (
+          <div className="empty-state">
+            <p>У вас пока нет заявок</p>
+            <Link to="/submit" className="btn btn-primary">Подать заявку</Link>
+          </div>
+        ) : (
+          <div className="votes-list">
+            {votes.map(vote => (
+              <div key={vote._id} className="vote-card">
+                <div className="vote-header">
+                  <div className="vote-address">{vote.address}</div>
+                  <span className={`badge ${getStatusClass(vote)}`}>{getStatusText(vote)}</span>
+                </div>
+                {vote.location && (
+                  <div className="vote-progress">
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{width: `${Math.min(vote.location.votes * 10, 100)}%`}}
+                      />
+                    </div>
+                    <span>{vote.location.votes}/10 голосов</span>
+                  </div>
+                )}
+                {vote.location?.installationReport && (
+                  <div className="installation-report">
+                    <h4>Отчёт об установке:</h4>
+                    {vote.location.installationReport.photos?.map((p, i) => (
+                      <img key={i} src={p} alt="" className="report-photo" />
+                    ))}
+                    <p>{vote.location.installationReport.report}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ManagerPage() {
   const auth = useAuth()
   const [locations, setLocations] = useState([])
-  const [tab, setTab] = useState('pending')
-  const [processed, setProcessed] = useState([])
-  const [selectedLocation, setSelectedLocation] = useState(null)
-  const [stats, setStats] = useState({ totalRequests: 0 })
-  const defaultCenter = [42.87, 74.59]
+  const [tab, setTab] = useState('collecting')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadData()
   }, [])
 
-  const loadData = () => {
-    Promise.all([api.getStats(), api.getProcessed()])
-      .then(([statsData, proc]) => {
-        setLocations(statsData.locations || [])
-        setProcessed(proc.map(a => a.toLowerCase().trim()))
-        setStats(statsData)
-      })
-      .catch(console.error)
+  const loadData = async () => {
+    const data = await api.getLocations()
+    setLocations(data)
+    setLoading(false)
   }
 
-  if (!auth?.role) {
+  if (!auth?.role || !['manager', 'admin'].includes(auth.role)) {
     return <Navigate to="/login" />
   }
 
-  const markAsProcessed = async (address) => {
-    try {
-      await api.markProcessed(address)
-      setProcessed([...processed, address.toLowerCase().trim()])
-    } catch (err) {
-      console.error(err)
-    }
+  const collecting = locations.filter(l => l.status === 'collecting')
+  const ready = locations.filter(l => l.status === 'ready')
+  const installing = locations.filter(l => l.status === 'installing')
+  const completed = locations.filter(l => l.status === 'completed')
+
+  const displayed = tab === 'collecting' ? collecting :
+                    tab === 'ready' ? ready :
+                    tab === 'installing' ? installing : completed
+
+  const handleMarkReady = async (id) => {
+    await api.markReady(id)
+    loadData()
   }
-
-  const isProcessed = (address) => processed.includes(address.toLowerCase().trim())
-
-  const readyLocations = locations.filter(l => l.count >= 10 && !isProcessed(l.address))
-  const pendingLocations = locations.filter(l => l.count < 10)
-  const doneLocations = locations.filter(l => isProcessed(l.address))
-
-  const displayLocations = tab === 'ready' ? readyLocations : tab === 'pending' ? pendingLocations : doneLocations
-
-  const locationsWithCoords = locations.filter(l => l.lat && l.lng)
 
   return (
     <div className="dashboard">
       <div className="container">
-        <div className="dashboard-header">
-          <h1 className="dashboard-title">
-            {auth.role === 'admin' ? 'Панель администратора' : 'Панель менеджера'}
-          </h1>
-          <div className="dashboard-stats">
-            <div className="mini-stat">
-              <span className="mini-stat-value">{stats.totalRequests}</span>
-              <span className="mini-stat-label">заявок</span>
-            </div>
-            <div className="mini-stat">
-              <span className="mini-stat-value">{locations.length}</span>
-              <span className="mini-stat-label">локаций</span>
-            </div>
-          </div>
-        </div>
+        <h1 className="dashboard-title">Панель менеджера</h1>
 
-        {/* Карта всех локаций */}
-        <div className="dashboard-map-section">
-          <h2 style={{marginBottom: '16px', fontSize: '18px', fontWeight: '600'}}>Карта заявок</h2>
-          <div className="dashboard-map-wrapper">
-            <MapContainer
-              center={defaultCenter}
-              zoom={12}
-              className="dashboard-map"
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              {locationsWithCoords.map((loc, idx) => (
-                <Marker
-                  key={idx}
-                  position={[loc.lat, loc.lng]}
-                  eventHandlers={{
-                    click: () => setSelectedLocation(loc)
-                  }}
-                >
-                  <Popup>
-                    <div style={{minWidth: '200px'}}>
-                      <strong>{loc.address}</strong>
-                      <div style={{marginTop: '8px', color: '#666'}}>
-                        {loc.count} {loc.count === 1 ? 'заявка' : loc.count < 5 ? 'заявки' : 'заявок'}
-                      </div>
-                      <div style={{marginTop: '4px'}}>
-                        <span className={`badge ${loc.count >= 10 ? (isProcessed(loc.address) ? 'badge-done' : 'badge-ready') : 'badge-pending'}`}>
-                          {isProcessed(loc.address) ? 'Установлено' : loc.count >= 10 ? 'Готово' : 'Сбор заявок'}
-                        </span>
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
-          </div>
-        </div>
-
-        {/* Табы */}
-        <div className="dashboard-tabs" style={{marginTop: '32px'}}>
-          <button
-            className={`tab ${tab === 'pending' ? 'active' : ''}`}
-            onClick={() => setTab('pending')}
-          >
-            Новые ({pendingLocations.length})
+        <div className="dashboard-tabs">
+          <button className={`tab ${tab === 'collecting' ? 'active' : ''}`} onClick={() => setTab('collecting')}>
+            Сбор ({collecting.length})
           </button>
-          <button
-            className={`tab ${tab === 'ready' ? 'active' : ''}`}
-            onClick={() => setTab('ready')}
-          >
-            К установке ({readyLocations.length})
+          <button className={`tab ${tab === 'ready' ? 'active' : ''}`} onClick={() => setTab('ready')}>
+            К установке ({ready.length})
           </button>
-          <button
-            className={`tab ${tab === 'done' ? 'active' : ''}`}
-            onClick={() => setTab('done')}
-          >
-            Выполнено ({doneLocations.length})
+          <button className={`tab ${tab === 'installing' ? 'active' : ''}`} onClick={() => setTab('installing')}>
+            Установка ({installing.length})
+          </button>
+          <button className={`tab ${tab === 'completed' ? 'active' : ''}`} onClick={() => setTab('completed')}>
+            Готово ({completed.length})
           </button>
         </div>
 
-        {displayLocations.length === 0 && (
-          <div className="card" style={{textAlign: 'center', padding: '60px', marginTop: '20px'}}>
-            <Clock size={48} style={{color: 'var(--text-muted)', marginBottom: '16px'}} />
-            <h3>Нет заявок в этой категории</h3>
-          </div>
-        )}
+        {/* Карта */}
+        <div className="dashboard-map-wrapper" style={{marginTop: '24px'}}>
+          <MapContainer center={[42.87, 74.59]} zoom={12} className="dashboard-map">
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            {displayed.filter(l => l.lat && l.lng).map(loc => (
+              <Marker key={loc._id} position={[loc.lat, loc.lng]}>
+                <Popup>
+                  <strong>{loc.address}</strong><br/>
+                  {loc.votes} голосов
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
+        </div>
 
-        <div style={{marginTop: '20px'}}>
-          {displayLocations.map((loc, idx) => (
-            <div key={idx} className="manager-card">
-              {loc.photos[0] ? (
-                <img src={loc.photos[0]} alt="" className="manager-card-image" />
-              ) : (
-                <div className="manager-card-image" style={{background: 'linear-gradient(135deg, var(--primary), var(--secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                  <MapPin size={48} color="white" />
-                </div>
-              )}
+        {/* Список */}
+        <div style={{marginTop: '24px'}}>
+          {loading ? <div className="loading">Загрузка...</div> :
+           displayed.length === 0 ? <div className="empty-state">Нет локаций</div> :
+           displayed.map(loc => (
+            <div key={loc._id} className="manager-card">
               <div className="manager-card-content">
                 <div className="manager-card-header">
                   <div className="manager-card-address">{loc.address}</div>
-                  <span className={`badge ${loc.count >= 10 ? (isProcessed(loc.address) ? 'badge-done' : 'badge-ready') : 'badge-pending'}`}>
-                    {isProcessed(loc.address) ? 'Установлено' : loc.count >= 10 ? 'Готово' : 'Сбор заявок'}
-                  </span>
+                  <span className={`badge badge-${loc.status}`}>{loc.votes} голосов</span>
                 </div>
                 <div className="manager-card-meta">
-                  <span><Users size={16} style={{verticalAlign: 'middle', marginRight: '4px'}} /> {loc.count} заявок</span>
-                  <span><Clock size={16} style={{verticalAlign: 'middle', marginRight: '4px'}} /> {loc.lastDate ? new Date(loc.lastDate).toLocaleDateString('ru-RU') : '—'}</span>
-                  <span>{loc.photos.length} фото</span>
+                  <span><Users size={16} /> {loc.voters?.length || 0} человек</span>
+                  <span><Clock size={16} /> {new Date(loc.updatedAt).toLocaleDateString('ru-RU')}</span>
                 </div>
-                {loc.comments && loc.comments.length > 0 && (
+                {loc.comments?.length > 0 && (
                   <div className="manager-card-comments">
                     <div className="comments-label">Комментарии:</div>
-                    {loc.comments.map((comment, i) => (
-                      <div key={i} className="comment-item">"{comment}"</div>
+                    {loc.comments.slice(0, 3).map((c, i) => (
+                      <div key={i} className="comment-item">"{c.text}"</div>
                     ))}
                   </div>
                 )}
                 <div className="manager-card-actions">
                   {loc.lat && loc.lng && (
-                    <a
-                      href={`https://www.google.com/maps?q=${loc.lat},${loc.lng}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-secondary btn-sm"
-                    >
-                      <Eye size={16} />
-                      На карте
+                    <a href={`https://maps.google.com?q=${loc.lat},${loc.lng}`} target="_blank" className="btn btn-secondary btn-sm">
+                      <Eye size={16} /> Карта
                     </a>
                   )}
-                  {!isProcessed(loc.address) && loc.count >= 10 && (
-                    <button
-                      className="btn btn-success btn-sm"
-                      onClick={() => markAsProcessed(loc.address)}
-                    >
-                      <CheckCircle size={16} />
-                      Выполнено
-                    </button>
-                  )}
-                  {auth.role === 'admin' && (
-                    <button className="btn btn-sm" style={{background: '#dc3545', color: 'white'}}>
-                      <Trash2 size={16} />
-                      Удалить
+                  {loc.status === 'collecting' && loc.votes >= 10 && (
+                    <button className="btn btn-success btn-sm" onClick={() => handleMarkReady(loc._id)}>
+                      <ChevronRight size={16} /> К установке
                     </button>
                   )}
                 </div>
@@ -692,16 +731,181 @@ function Dashboard() {
   )
 }
 
+function InstallerPage() {
+  const auth = useAuth()
+  const [locations, setLocations] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
+  const [photos, setPhotos] = useState([])
+  const [report, setReport] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    const [ready, installing] = await Promise.all([
+      api.getReadyLocations(),
+      api.getInstallingLocations()
+    ])
+    setLocations([...ready, ...installing])
+    setLoading(false)
+  }
+
+  if (!auth?.role || !['installer', 'admin'].includes(auth.role)) {
+    return <Navigate to="/login" />
+  }
+
+  const handleTakeJob = async (id) => {
+    await api.assignInstaller(id)
+    loadData()
+  }
+
+  const handlePhotoAdd = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => setPhotos([...photos, reader.result])
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleSubmitReport = async () => {
+    if (!selectedId || photos.length === 0) return
+    setSubmitting(true)
+    await api.completeInstallation(selectedId, { photos, report })
+    setSelectedId(null)
+    setPhotos([])
+    setReport('')
+    setSubmitting(false)
+    loadData()
+  }
+
+  return (
+    <div className="dashboard">
+      <div className="container">
+        <h1 className="dashboard-title">Установки</h1>
+
+        {selectedId && (
+          <div className="report-form card">
+            <h3>Отчёт об установке</h3>
+            <div className="form-group">
+              <label className="form-label">Фото (минимум 1)</label>
+              <input type="file" accept="image/*" onChange={handlePhotoAdd} />
+              <div className="photo-previews">
+                {photos.map((p, i) => <img key={i} src={p} alt="" />)}
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Комментарий</label>
+              <textarea className="form-textarea" value={report} onChange={(e) => setReport(e.target.value)} />
+            </div>
+            <div style={{display: 'flex', gap: '12px'}}>
+              <button className="btn btn-secondary" onClick={() => setSelectedId(null)}>Отмена</button>
+              <button className="btn btn-success" onClick={handleSubmitReport} disabled={submitting || photos.length === 0}>
+                {submitting ? 'Отправка...' : 'Завершить'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {loading ? <div className="loading">Загрузка...</div> :
+         locations.length === 0 ? <div className="empty-state">Нет заданий</div> :
+         locations.map(loc => (
+          <div key={loc._id} className="manager-card">
+            <div className="manager-card-content">
+              <div className="manager-card-header">
+                <div className="manager-card-address">{loc.address}</div>
+                <span className={`badge badge-${loc.status}`}>
+                  {loc.status === 'ready' ? 'Ожидает' : 'В работе'}
+                </span>
+              </div>
+              <div className="manager-card-actions">
+                <a href={`https://maps.google.com?q=${loc.lat},${loc.lng}`} target="_blank" className="btn btn-secondary btn-sm">
+                  <MapPin size={16} /> Навигация
+                </a>
+                {loc.status === 'ready' && (
+                  <button className="btn btn-primary btn-sm" onClick={() => handleTakeJob(loc._id)}>
+                    Взять в работу
+                  </button>
+                )}
+                {loc.status === 'installing' && (
+                  <button className="btn btn-success btn-sm" onClick={() => setSelectedId(loc._id)}>
+                    <Upload size={16} /> Загрузить отчёт
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AdminPage() {
+  const auth = useAuth()
+  const [stats, setStats] = useState({})
+
+  useEffect(() => {
+    api.getStats().then(setStats)
+  }, [])
+
+  if (auth?.role !== 'admin') return <Navigate to="/login" />
+
+  return (
+    <div className="dashboard">
+      <div className="container">
+        <h1 className="dashboard-title">Админ панель</h1>
+
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-value">{stats.totalVotes || 0}</div>
+            <div className="stat-label">Голосов</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.totalLocations || 0}</div>
+            <div className="stat-label">Локаций</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.collecting || 0}</div>
+            <div className="stat-label">Сбор</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.ready || 0}</div>
+            <div className="stat-label">К установке</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.completed || 0}</div>
+            <div className="stat-label">Завершено</div>
+          </div>
+        </div>
+
+        <div style={{marginTop: '32px'}}>
+          <Link to="/manager" className="btn btn-secondary" style={{marginRight: '12px'}}>
+            Панель менеджера
+          </Link>
+          <Link to="/installer" className="btn btn-secondary">
+            Панель установщика
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============ APP ============
+
 function AuthProvider({ children }) {
   const [auth, setAuth] = useState(() => {
     const saved = localStorage.getItem('taza_shaar_auth')
     return saved ? JSON.parse(saved) : null
   })
 
-  const login = (username, role) => {
-    const authData = { username, role }
-    setAuth(authData)
-    localStorage.setItem('taza_shaar_auth', JSON.stringify(authData))
+  const login = (data) => {
+    setAuth(data)
+    localStorage.setItem('taza_shaar_auth', JSON.stringify(data))
   }
 
   const logout = () => {
@@ -724,9 +928,12 @@ function App() {
         <main>
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/submit" element={<SubmitPage />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/submit" element={<SubmitPage />} />
+            <Route path="/my-requests" element={<MyRequestsPage />} />
+            <Route path="/manager" element={<ManagerPage />} />
+            <Route path="/installer" element={<InstallerPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </main>
         <Footer />
