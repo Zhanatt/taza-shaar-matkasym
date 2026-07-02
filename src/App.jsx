@@ -492,6 +492,17 @@ function SubmitPage() {
           </div>
 
           <div className="form-group">
+            <label className="form-label"><Phone size={18} /> Номер телефона</label>
+            <input
+              type="tel"
+              className="form-input"
+              placeholder="+996 XXX XXX XXX"
+              value={auth.phone || ''}
+              readOnly
+            />
+          </div>
+
+          <div className="form-group">
             <label className="form-label">Комментарий</label>
             <textarea
               className="form-textarea"
